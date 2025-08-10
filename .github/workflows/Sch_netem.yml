@@ -5,37 +5,39 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
+      - name: Set up job
+        run: sudo apt-get update
+
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Install build deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev zlib1g-dev gawk wget python3 unzip subversion git file
+          sudo apt-get install -y build-essential libncurses5-dev zstd wget
 
       - name: Download OpenWrt SDK 24.10.0 (mediatek/filogic)
         run: |
-          wget -q --show-progress https://downloads.openwrt.org/releases/24.10.0/targets/mediatek/filogic/openwrt-sdk-24.10.0-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-          tar -xf openwrt-sdk-24.10.0-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          wget -q --show-progress https://downloads.openwrt.org/releases/24.10.0/targets/mediatek/filogic/openwrt-sdk-24.10.0-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.zstd
+          tar -I zstd -xf openwrt-sdk-24.10.0-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.zstd
+          mv openwrt-sdk-24.10.0-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64 sdk
 
       - name: Prepare SDK feeds
         run: |
-          cd openwrt-sdk-24.10.0-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64
+          cd sdk
           ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          ./scripts/feeds install kmod-sched-netem
 
       - name: Build kmod-sched-netem
         run: |
-          cd openwrt-sdk-24.10.0-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64
+          cd sdk
           make defconfig
-          # try both likely package paths
-          make package/kernel/linux/modules/sched-netem/compile V=s || make package/kmod-sched-netem/compile V=s
+          make package/kernel/linux/compile V=s
 
       - name: Upload ipk artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: kmod-sched-netem-ipk
-          path: openwrt-sdk-24.10.0-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64/bin/packages/**/kmod-sched-netem*.ipk
+          name: kmod-sched-netem
+          path: sdk/bin/packages/*/base/kmod-sched-netem*.ipk
