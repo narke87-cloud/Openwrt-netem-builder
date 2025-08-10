@@ -6,17 +6,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Set up job
-        run: sudo apt-get update
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Install build deps
+      - name: Install dependencies
         run: |
-          sudo apt-get install -y build-essential libncurses5-dev zstd wget
+          sudo apt update
+          sudo apt install -y build-essential libncurses5-dev gawk git wget unzip file zstd
 
       - name: Download OpenWrt SDK 24.10.0 (mediatek/filogic)
         run: |
@@ -24,20 +21,29 @@ jobs:
           tar -I zstd -xf openwrt-sdk-24.10.0-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.zstd
           mv openwrt-sdk-24.10.0-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64 sdk
 
-      - name: Prepare SDK feeds
+      - name: Prepare kernel module build only
         run: |
           cd sdk
           ./scripts/feeds update -a
-          ./scripts/feeds install kmod-sched-netem
+          ./scripts/feeds install -a
+          # Clean everything else to speed up build
+          make defconfig
+          echo "CONFIG_PACKAGE_kmod-sched-netem=m" >> .config
 
-      - name: Build kmod-sched-netem
+      - name: Build kmod-sched-netem only
         run: |
           cd sdk
-          make defconfig
-          make package/kernel/linux/compile V=s
+          make package/kernel/linux/compile V=s -j$(nproc)
 
-      - name: Upload ipk artifact
-        uses: actions/upload-artifact@v3
+      - name: Find built IPK
+        id: find_ipk
+        run: |
+          cd sdk
+          FILE=$(find bin/packages -name "kmod-sched-netem*.ipk" | head -n 1)
+          echo "ipk_file=$FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: kmod-sched-netem
-          path: sdk/bin/packages/*/base/kmod-sched-netem*.ipk
+          path: ${{ steps.find_ipk.outputs.ipk_file }}
