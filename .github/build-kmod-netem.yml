@@ -1,0 +1,38 @@
+name: Build kmod-sched-netem for GL-MT6000 (Flint 2)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential libncurses5-dev zlib1g-dev gawk git subversion wget python3 unzip
+
+      - name: Download OpenWrt SDK for 24.10.2 (mediatek/filogic, kernel 6.6.93)
+        run: |
+          mkdir -p ~/sdk && cd ~/sdk
+          wget https://downloads.openwrt.org/releases/24.10.2/targets/mediatek/filogic/openwrt-sdk-24.10.2-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          tar -xf openwrt-sdk-24.10.2-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          mv openwrt-sdk-24.10.2-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64 sdk
+
+      - name: Build kmod-sched-netem
+        run: |
+          cd ~/sdk/sdk
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          make defconfig
+          make package/kernel/linux/compile V=sc CONFIG_PACKAGE_kmod-sched-netem=m
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmod-sched-netem
+          path: ~/sdk/sdk/bin/packages/*/*/kmod-sched-netem*.ipk
